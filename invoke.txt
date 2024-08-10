@@ -1,0 +1,2 @@
+Invoke-WebRequest -Uri 'https://api.dofusdu.de/dofus2/en/items/resources/all?sort%5Blevel%5D=desc' -Headers @{"Accept-Encoding"="gzip"} | Select-Object -ExpandProperty Content | Out-File -Encoding utf8 dofus_resources.json
+PS E:\Data\Projects\Dofus Craftimizer\Dofus-Craftimizer>
