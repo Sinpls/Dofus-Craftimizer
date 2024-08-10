@@ -1,58 +1,13 @@
-import json
-import os
-import re
+from data_access import data_access
 
 def search_json(file_name, search_term, exact_ankama_id=None):
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    file_path = os.path.join(current_dir, file_name)
-    
-    with open(file_path, 'r') as file:
-        data = json.load(file)
-    
-    results = []
-    for item in data['items']:
-        if exact_ankama_id is not None:
-            if item['ankama_id'] == exact_ankama_id:
-                results.append({
-                    'ankama_id': item['ankama_id'],
-                    'name': item['name'],
-                    'level': item.get('level', 'N/A'),
-                    'type': item.get('type', 'N/A'),
-                    'recipe': item.get('recipe', [])
-                })
-                break  # We found the exact match, no need to continue searching
-        elif search_term.lower() in item['name'].lower():
-            results.append({
-                'ankama_id': item['ankama_id'],
-                'name': item['name'],
-                'level': item.get('level', 'N/A'),
-                'type': item.get('type', 'N/A'),
-                'recipe': item.get('recipe', [])
-            })
-    
-    return results
+    return data_access.search_items(file_name, search_term, exact_ankama_id)
 
 def find_item_by_id(ankama_id):
-    # Search in resources
-    result = search_json('dofus_resources.json', '', exact_ankama_id=ankama_id)
-    if result:
-        return result[0]
-    
-    # If not found in resources, search in equipment
-    result = search_json('dofus_equipment.json', '', exact_ankama_id=ankama_id)
-    if result:
-        return result[0]
-    
-    # If not found in equipment, search in consumables
-    result = search_json('dofus_consumables.json', '', exact_ankama_id=ankama_id)
-    if result:
-        return result[0]
-    
-    return None
+    return data_access.find_item_by_id(ankama_id)
 
 def find_resource_by_id(ankama_id):
-    item = find_item_by_id(ankama_id)
-    return item['name'] if item else None
+    return data_access.find_resource_by_id(ankama_id)
 
 def get_item_details(ankama_id):
     return find_item_by_id(ankama_id)

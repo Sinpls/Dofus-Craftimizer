@@ -121,8 +121,13 @@ class DofusCraftimizerUI:
         self.ingredients_tree.bind("<Double-1>", self.controller.on_ingredient_double_click)
         self.intermediate_tree.bind("<Double-1>", self.controller.on_intermediate_double_click)
 
+        self.equipment_tree.bind("<Delete>", self.controller.remove_selected_equipment)
+
     def get_search_query(self):
         return self.search_var.get()
+
+    def insert_result(self, values, ankama_id):
+            self.results_tree.insert("", "end", values=values, tags=(ankama_id,))
 
     def clear_results(self):
         for item in self.results_tree.get_children():

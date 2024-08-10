@@ -1,7 +1,7 @@
 # models.py
 
 class Ingredient:
-    def __init__(self, name, amount=0, cost=0, ingredient_type="resource"):
+    def __init__(self, name, amount, cost, ingredient_type):
         self.name = name
         self.amount = amount
         self.cost = cost
@@ -11,26 +11,30 @@ class IngredientManager:
     def __init__(self):
         self.ingredients = {}
 
-    def add_or_update_ingredient(self, name, amount, cost=None, ingredient_type="resource"):
+    def add_or_update_ingredient(self, name, amount, cost, ingredient_type):
         if name in self.ingredients:
-            self.ingredients[name].amount = amount
-            if cost is not None:
+            self.ingredients[name].amount += amount
+            if cost != 0:  # Only update cost if it's non-zero
                 self.ingredients[name].cost = cost
         else:
-            self.ingredients[name] = Ingredient(name, amount, cost if cost is not None else 0, ingredient_type)
+            self.ingredients[name] = Ingredient(name, amount, cost, ingredient_type)
 
-    def get_ingredients_list(self):
-        return list(self.ingredients.values())
+    def get_ingredient_cost(self, name):
+        return self.ingredients[name].cost if name in self.ingredients else 0
 
     def update_ingredient_cost(self, name, cost):
         if name in self.ingredients:
             self.ingredients[name].cost = cost
 
-    def get_ingredient_cost(self, name):
-        if name in self.ingredients:
-            return self.ingredients[name].cost
-        return 0
+    def get_ingredients_list(self):
+        return list(self.ingredients.values())
 
-    def clear_amounts(self):
-        for ingredient in self.ingredients.values():
-            ingredient.amount = 0
+    def clear_ingredients(self):
+        self.ingredients.clear()
+
+    def get_ingredient(self, name):
+        return self.ingredients.get(name)
+
+    def update_ingredient_amount(self, name, amount):
+        if name in self.ingredients:
+            self.ingredients[name].amount = amount
