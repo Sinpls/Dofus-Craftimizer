@@ -2,52 +2,60 @@ import json
 import os
 import re
 
-def search_json(file_name, search_term):
-    # Get the current directory
+def search_json(file_name, search_term, exact_ankama_id=None):
     current_dir = os.path.dirname(os.path.abspath(__file__))
-    
-    # Construct the full file path
     file_path = os.path.join(current_dir, file_name)
     
-    # Read the JSON file
     with open(file_path, 'r') as file:
         data = json.load(file)
     
-    # Compile a case-insensitive regular expression for the search term
-    search_regex = re.compile(search_term, re.IGNORECASE)
-    
-    # Find all matches in the "name" field only
     results = []
     for item in data['items']:
-        if search_regex.search(item['name']):
+        if exact_ankama_id is not None:
+            if item['ankama_id'] == exact_ankama_id:
+                results.append({
+                    'ankama_id': item['ankama_id'],
+                    'name': item['name'],
+                    'level': item.get('level', 'N/A'),
+                    'type': item.get('type', 'N/A'),
+                    'recipe': item.get('recipe', [])
+                })
+                break  # We found the exact match, no need to continue searching
+        elif search_term.lower() in item['name'].lower():
             results.append({
                 'ankama_id': item['ankama_id'],
                 'name': item['name'],
                 'level': item.get('level', 'N/A'),
                 'type': item.get('type', 'N/A'),
-                'recipe': item.get('recipe', [])  # Make sure to include the recipe
+                'recipe': item.get('recipe', [])
             })
     
     return results
 
-def find_resource_by_id(ankama_id):
-    # Get the current directory
-    current_dir = os.path.dirname(os.path.abspath(__file__))
+def find_item_by_id(ankama_id):
+    # Search in resources
+    result = search_json('dofus_resources.json', '', exact_ankama_id=ankama_id)
+    if result:
+        return result[0]
     
-    # Construct the full file path for dofus_resources.json
-    file_path = os.path.join(current_dir, 'dofus_resources.json')
+    # If not found in resources, search in equipment
+    result = search_json('dofus_equipment.json', '', exact_ankama_id=ankama_id)
+    if result:
+        return result[0]
     
-    # Read the JSON file
-    with open(file_path, 'r') as file:
-        data = json.load(file)
+    # If not found in equipment, search in consumables
+    result = search_json('dofus_consumables.json', '', exact_ankama_id=ankama_id)
+    if result:
+        return result[0]
     
-    # Search for the item with the given ankama_id
-    for item in data['items']:
-        if item['ankama_id'] == ankama_id:
-            return item['name']
-    
-    # If no item is found, return None
     return None
+
+def find_resource_by_id(ankama_id):
+    item = find_item_by_id(ankama_id)
+    return item['name'] if item else None
+
+def get_item_details(ankama_id):
+    return find_item_by_id(ankama_id)
 
 def test_find_resource():
     test_id = 2652
