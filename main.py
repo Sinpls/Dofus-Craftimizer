@@ -47,8 +47,12 @@ class DofusCraftimizer:
             clean_type = self.get_clean_type(item['type'])
             self.ui.insert_result((item['name'], item['level'], clean_type), item['ankama_id'])
 
-    def add_to_equipment_list(self):
-        selected_items = self.ui.get_selected_results()
+    def add_to_equipment_list(self, event=None):
+        if event:  # If triggered by double-click
+            selected_items = [self.ui.results_tree.focus()]
+        else:  # If called programmatically
+            selected_items = self.ui.get_selected_results()
+
         for selected_item in selected_items:
             values = self.ui.get_result_values(selected_item)
             item_name = values[0]  # Assuming the first value is the item name
@@ -140,15 +144,42 @@ class DofusCraftimizer:
             self.update_single_item()
         elif tree_id == str(self.ui.ingredients_tree):
             ingredient_name = self.ui.get_tree_item_values(tree, item)[0]
-            self.user_set_costs[ingredient_name] = float(self.parse_number(new_value))
+            new_cost = float(self.parse_number(new_value))
+            self.user_set_costs[ingredient_name] = new_cost
+            if new_cost == 0 and ingredient_name in self.original_intermediate_items:
+                self.move_item_to_intermediate(ingredient_name)
         elif tree_id == str(self.ui.intermediate_tree):
             item_name = self.ui.get_tree_item_values(tree, item)[0]
-            self.user_set_costs[item_name] = float(self.parse_number(new_value))
+            new_cost = float(self.parse_number(new_value))
+            self.user_set_costs[item_name] = new_cost
             if item_name in self.intermediate_items:
-                self.intermediate_items[item_name]['cost'] = float(self.parse_number(new_value))
-        
-        self.calculate()
+                self.intermediate_items[item_name]['cost'] = new_cost
+            if new_cost > 0:
+                self.move_item_to_ingredients(item_name)
 
+        self.calculate()
+        
+    def move_item_to_ingredients(self, item_name):
+        if item_name in self.intermediate_items:
+            item_details = self.intermediate_items.pop(item_name)
+            self.ingredient_manager.add_or_update_ingredient(
+                item_name,
+                self.total_amounts.get(item_name, 0),
+                self.user_set_costs.get(item_name, item_details['cost']),
+                ingredient_type=item_details['type']
+            )
+            self.update_ingredients_list()
+            self.update_intermediate_items_list()
+
+    def move_item_to_intermediate(self, item_name):
+        if item_name in self.original_intermediate_items:
+            original_details = self.original_intermediate_items[item_name]
+            self.intermediate_items[item_name] = original_details.copy()
+            self.intermediate_items[item_name]['amount'] = self.total_amounts.get(item_name, 0)
+            self.ingredient_manager.remove_ingredient(item_name)
+            self.user_set_costs.pop(item_name, None)
+            self.update_ingredients_list()
+            self.update_intermediate_items_list()
     def update_single_item(self):
         for item in self.ui.get_equipment_children():
             name = self.ui.get_equipment_value(item, "Name")
@@ -209,13 +240,15 @@ class DofusCraftimizer:
                 
                 profit_per_unit = sell_price - cost_per_unit
                 self.ui.set_equipment_value(item, "Cost per Unit", self.format_number(int(cost_per_unit)))
-                self.ui.set_equipment_value(item, "Profit", self.format_number(int(profit_per_unit)))
+                self.ui.set_equipment_value(item, "Profit", self.format_number(int(profit_per_unit * amount)))
 
         for name, details in temp_intermediate_items.items():
             if name in self.intermediate_items:
                 self.intermediate_items[name]['level'] = details['level']
                 if name in self.user_set_costs:
                     self.intermediate_items[name]['cost'] = self.user_set_costs[name]
+                else:
+                    self.intermediate_items[name]['cost'] = details['cost']
         
         self.update_ingredients_list()
         self.update_intermediate_items_list()
