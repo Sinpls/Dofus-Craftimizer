@@ -117,9 +117,9 @@ class DofusCraftimizerUI:
         equipment_scrollbar.grid(row=0, column=1, sticky=(tk.N, tk.S))
         self.equipment_tree.configure(yscrollcommand=equipment_scrollbar.set)
 
-        self.equipment_tree.bind("<Double-1>", self.controller.on_equipment_double_click)
-        self.ingredients_tree.bind("<Double-1>", self.controller.on_ingredient_double_click)
-        self.intermediate_tree.bind("<Double-1>", self.controller.on_intermediate_double_click)
+        self.equipment_tree.bind("<Double-1>", self.on_equipment_double_click)
+        self.ingredients_tree.bind("<Double-1>", self.on_ingredient_double_click)
+        self.intermediate_tree.bind("<Double-1>", self.on_intermediate_double_click)
 
         self.equipment_tree.bind("<Delete>", self.controller.remove_selected_equipment)
 
@@ -187,3 +187,49 @@ class DofusCraftimizerUI:
         entry.select_range(0, tk.END)
         entry.focus()
         return entry
+    
+    def on_equipment_double_click(self, event):
+        item = self.equipment_tree.identify('item', event.x, event.y)
+        column = self.equipment_tree.identify_column(event.x)
+        
+        if column in ("#2", "#4"):  # Amount or Sell Price column
+            self.edit_tree_item(self.equipment_tree, item, column)
+
+    def on_ingredient_double_click(self, event):
+        item = self.ingredients_tree.identify('item', event.x, event.y)
+        column = self.ingredients_tree.identify_column(event.x)
+        
+        if column == "#3":  # Cost column
+            self.edit_tree_item(self.ingredients_tree, item, column)
+
+    def on_intermediate_double_click(self, event):
+        item = self.intermediate_tree.identify('item', event.x, event.y)
+        column = self.intermediate_tree.identify_column(event.x)
+        
+        if column == "#3":  # Cost column
+            self.edit_tree_item(self.intermediate_tree, item, column)
+
+    def edit_tree_item(self, tree, item, column):
+        x, y, width, height = tree.bbox(item, column)
+        
+        def ok(event=None):
+            new_value = entry.get()
+            entry.destroy()
+            tree.set(item, column, new_value)
+            self.controller.update_item(tree, item, column, new_value)
+
+        entry = ttk.Entry(tree, width=width//8)
+        entry.place(x=x, y=y, width=width, height=height)
+        entry.insert(0, tree.set(item, column))
+        entry.focus_set()
+        entry.bind('<Return>', ok)
+        entry.bind('<FocusOut>', ok)
+
+    def get_tree_item_values(self, tree, item):
+        return tree.item(item)['values']
+
+    def set_tree_item_value(self, tree, item, column, value):
+        tree.set(item, column, value)
+
+    def get_tree_children(self, tree):
+        return tree.get_children()
