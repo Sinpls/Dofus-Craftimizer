@@ -1,14 +1,14 @@
-# main.py
 import logging
+import json
 from functools import lru_cache
 import tkinter as tk
 from typing import Dict, Any
 
-from pprint import pprint
 from models import IngredientManager, Ingredient
 from utils import process_recipe
 from data_access import data_access
-from ui import DofusCraftimizerUI
+from ui import StyledDofusCraftimizerUI
+from api_importer import update_dofus_data
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -20,12 +20,11 @@ class DofusCraftimizer:
         self.equipment_data: Dict[str, Dict[str, float]] = {}
         self.intermediate_items: Dict[str, Dict[str, Any]] = {}
         self.resource_usage: Dict[str, set] = {}
-        self.non_zero_cost_items: set = set()
         self.total_amounts: Dict[str, int] = {}
         self.user_set_costs: Dict[str, float] = {}
         self.original_intermediate_items: Dict[str, Dict[str, Any]] = {}
 
-        self.ui = DofusCraftimizerUI(master, self)
+        self.ui = StyledDofusCraftimizerUI(master, self)
 
     def get_clean_type(self, type_data: Any) -> str:
         if isinstance(type_data, str):
@@ -52,18 +51,24 @@ class DofusCraftimizer:
         selected_items = self.ui.get_selected_results()
         for selected_item in selected_items:
             values = self.ui.get_result_values(selected_item)
-            ankama_id = self.ui.get_result_ankama_id(selected_item)
+            item_name = values[0]  # Assuming the first value is the item name
             
             # Check if the item already exists in the equipment list
-            item_exists = False
+            existing_item = None
             for item in self.ui.get_equipment_children():
-                tags = self.ui.get_equipment_item_tags(item)
-                if tags and tags[0] == ankama_id:
-                    item_exists = True
+                if self.ui.get_equipment_value(item, "Name") == item_name:
+                    existing_item = item
                     break
             
-            if not item_exists:
-                item_id = self.ui.insert_equipment(ankama_id, (values[0], "1", "0", "0", "0"))
+            if existing_item:
+                # If the item exists, increase its amount by 1
+                current_amount = int(self.ui.get_equipment_value(existing_item, "Amount"))
+                new_amount = current_amount + 1
+                self.ui.set_equipment_value(existing_item, "Amount", str(new_amount))
+                self.equipment_data[existing_item]["amount"] = new_amount
+            else:
+                # If the item doesn't exist, add it to the list
+                item_id = self.ui.insert_equipment(item_name, (item_name, "1", "0", "0", "0"))
                 self.equipment_data[item_id] = {"sell_price": 0, "amount": 1}
         
         self.update_single_item()
@@ -121,7 +126,6 @@ class DofusCraftimizer:
                         if parent_item:
                             self.resource_usage.setdefault(ingredient_name, set()).add(parent_item)
 
-
         return total_cost
     
     def update_item(self, tree, item, column, new_value):
@@ -129,19 +133,19 @@ class DofusCraftimizer:
         if tree_id == str(self.ui.equipment_tree):
             if column == "#2":  # Amount
                 self.equipment_data[item] = self.equipment_data.get(item, {})
-                self.equipment_data[item]["amount"] = int(new_value)
+                self.equipment_data[item]["amount"] = int(self.parse_number(new_value))
             elif column == "#4":  # Sell Price
                 self.equipment_data[item] = self.equipment_data.get(item, {})
-                self.equipment_data[item]["sell_price"] = float(new_value)
+                self.equipment_data[item]["sell_price"] = float(self.parse_number(new_value))
             self.update_single_item()
         elif tree_id == str(self.ui.ingredients_tree):
             ingredient_name = self.ui.get_tree_item_values(tree, item)[0]
-            self.user_set_costs[ingredient_name] = float(new_value)
+            self.user_set_costs[ingredient_name] = float(self.parse_number(new_value))
         elif tree_id == str(self.ui.intermediate_tree):
             item_name = self.ui.get_tree_item_values(tree, item)[0]
-            self.user_set_costs[item_name] = float(new_value)
+            self.user_set_costs[item_name] = float(self.parse_number(new_value))
             if item_name in self.intermediate_items:
-                self.intermediate_items[item_name]['cost'] = float(new_value)
+                self.intermediate_items[item_name]['cost'] = float(self.parse_number(new_value))
         
         self.calculate()
 
@@ -159,8 +163,8 @@ class DofusCraftimizer:
                 total_sell = sell_price * amount
                 profit = total_sell - total_cost
                 
-                self.ui.set_equipment_value(item, "Cost per Unit", f"{cost_per_unit:.2f}")
-                self.ui.set_equipment_value(item, "Profit", f"{profit:.2f}")
+                self.ui.set_equipment_value(item, "Cost per Unit", self.format_number(int(cost_per_unit)))
+                self.ui.set_equipment_value(item, "Profit", self.format_number(int(profit)))
 
                 # Color coding
                 self.ui.set_equipment_tags(item, ('profit',) if profit > 0 else ('loss',) if profit < 0 else ())
@@ -175,14 +179,15 @@ class DofusCraftimizer:
                 ingredient = self.ingredient_manager.get_ingredient(ingredient_name)
                 cost = self.user_set_costs.get(ingredient_name, ingredient.cost if ingredient else 0)
                 ingredient_type = ingredient.type if ingredient else self.intermediate_items.get(ingredient_name, {}).get('type', 'Intermediate')
-                self.ui.insert_ingredient((ingredient_name, total_amount, cost, ingredient_type))
+                self.ui.insert_ingredient((ingredient_name, self.format_number(total_amount), self.format_number(int(cost)), ingredient_type))
 
     def update_intermediate_items_list(self):
         self.ui.clear_intermediate_items()
-        for name, details in self.intermediate_items.items():
+        sorted_items = sorted(self.intermediate_items.items(), key=lambda x: x[1]['level'])
+        for name, details in sorted_items:
             if name not in self.user_set_costs:
                 total_amount = self.total_amounts.get(name, 0)
-                self.ui.insert_intermediate_item((name, total_amount, f"{details['cost']:.2f}", details['level']))
+                self.ui.insert_intermediate_item((name, self.format_number(total_amount), self.format_number(int(details['cost'])), details['level']))
 
     def calculate(self):
         self.resource_usage.clear()
@@ -203,8 +208,8 @@ class DofusCraftimizer:
                 cost_per_unit = self.calculate_item_cost(item_details, amount, 1, name) / amount
                 
                 profit_per_unit = sell_price - cost_per_unit
-                self.ui.set_equipment_value(item, "Cost per Unit", f"{cost_per_unit:.2f}")
-                self.ui.set_equipment_value(item, "Profit", f"{profit_per_unit:.2f}")
+                self.ui.set_equipment_value(item, "Cost per Unit", self.format_number(int(cost_per_unit)))
+                self.ui.set_equipment_value(item, "Profit", self.format_number(int(profit_per_unit)))
 
         for name, details in temp_intermediate_items.items():
             if name in self.intermediate_items:
@@ -224,6 +229,13 @@ class DofusCraftimizer:
         self.update_ingredients_list()
         self.update_intermediate_items_list()
 
+    def format_number(self, number):
+        return f"{number:,}"
+
+    def parse_number(self, string):
+        return int(string.replace(',', ''))
+
+update_dofus_data()
 if __name__ == "__main__":
     root = tk.Tk()
     app = DofusCraftimizer(root)
