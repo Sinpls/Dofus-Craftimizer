@@ -38,3 +38,6 @@ class IngredientManager:
     def update_ingredient_amount(self, name, amount):
         if name in self.ingredients:
             self.ingredients[name].amount = amount
+
+    def remove_ingredient(self, name):
+            self.ingredients.pop(name, None)

@@ -44,4 +44,10 @@ class DataAccess:
         item = self.find_item_by_id(ankama_id)
         return item['name'] if item else None
 
+    def search_json(self, file_name, search_term, exact_ankama_id=None):
+        return self.search_items(file_name, search_term, exact_ankama_id)
+
+    def get_item_details(self, ankama_id):
+        return self.find_item_by_id(ankama_id)
+
 data_access = DataAccess()  # Create a single instance to be used across the application
