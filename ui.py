@@ -5,14 +5,10 @@ class StyledDofusCraftimizerUI:
     def __init__(self, master, controller):
         self.master = master
         self.controller = controller
-        self.master.title("Dofus Craftimizer")
 
         self.create_styles()
         self.create_widgets()
 
-        self.master.update()
-        self.master.geometry('')  # This resets the window size to fit its contents
-        self.master.minsize(self.master.winfo_width(), self.master.winfo_height())
         self.last_clicked_tree = None
 
     def create_styles(self):
@@ -74,125 +70,109 @@ class StyledDofusCraftimizerUI:
                 'border': '1', 'sticky': 'nswe'})])
     def create_widgets(self):
         # Main frame
-        main_frame = ttk.Frame(self.master, style='TFrame')
-        main_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
-        self.master.columnconfigure(0, weight=1)
-        self.master.rowconfigure(0, weight=1)
-        main_frame.columnconfigure(0, weight=1)
-        main_frame.rowconfigure(1, weight=1)
-        main_frame.rowconfigure(2, weight=1)
+        self.main_frame = ttk.Frame(self.master, padding="10 10 10 10")
+        self.main_frame.pack(expand=True, fill=tk.BOTH)
 
         # Search frame
-        search_frame = ttk.Frame(main_frame, style='Card.TFrame')
-        search_frame.grid(row=0, column=0, sticky=(tk.W, tk.E), pady=(0, 10))
-        search_frame.columnconfigure(0, weight=1)
+        search_frame = ttk.Frame(self.main_frame)
+        search_frame.pack(fill=tk.X, padx=10, pady=10)
 
         self.search_var = tk.StringVar()
-        search_entry = ttk.Entry(search_frame, textvariable=self.search_var, width=40, style='Search.TEntry')
-        search_entry.grid(row=0, column=0, padx=(10, 10), pady=(10, 10), sticky=(tk.W, tk.E))
+        search_entry = ttk.Entry(search_frame, textvariable=self.search_var)
+        search_entry.pack(side=tk.LEFT, expand=True, fill=tk.X)
         search_entry.bind("<Return>", self.controller.search_equipment)
 
         # Results and Equipment frame
-        results_equipment_frame = ttk.Frame(main_frame, style='TFrame')
-        results_equipment_frame.grid(row=1, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
-        results_equipment_frame.columnconfigure(0, weight=1)
-        results_equipment_frame.columnconfigure(1, weight=1)
-        results_equipment_frame.rowconfigure(0, weight=1)
+        results_equipment_frame = ttk.Frame(self.main_frame)
+        results_equipment_frame.pack(expand=True, fill=tk.BOTH, padx=10, pady=5)
 
         # Search results frame
-        results_frame = ttk.LabelFrame(results_equipment_frame, text="Search Results", style='Card.TLabelframe')
-        results_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S), padx=(0, 5))
-        results_frame.columnconfigure(0, weight=1)
-        results_frame.rowconfigure(0, weight=1)
+        results_frame = ttk.LabelFrame(results_equipment_frame, text="Search Results")
+        results_frame.pack(side=tk.LEFT, expand=True, fill=tk.BOTH, padx=(0, 5))
 
-        self.results_tree = ttk.Treeview(results_frame, columns=("Name", "Level", "Type"), show="headings", style='Treeview', height=10)
+        self.results_tree = ttk.Treeview(results_frame, columns=("Name", "Level", "Type"), show="headings")
         self.results_tree.heading("Name", text="Name")
         self.results_tree.heading("Level", text="Level")
         self.results_tree.heading("Type", text="Type")
         self.results_tree.column("Name", width=150)
-        self.results_tree.column("Level", width=50)
+        self.results_tree.column("Level", width=50, anchor=tk.CENTER)
         self.results_tree.column("Type", width=100)
-        self.results_tree.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S), padx=(1, 0), pady=(1, 1))
+        self.results_tree.pack(side=tk.LEFT, expand=True, fill=tk.BOTH)
 
-        results_scrollbar = ttk.Scrollbar(results_frame, orient="vertical", command=self.results_tree.yview, style="Custom.Vertical.TScrollbar")
-        results_scrollbar.grid(row=0, column=1, sticky=(tk.N, tk.S), pady=(1, 1))
+        results_scrollbar = ttk.Scrollbar(results_frame, orient="vertical", command=self.results_tree.yview)
+        results_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         self.results_tree.configure(yscrollcommand=results_scrollbar.set)
 
         # Equipment list frame
-        equipment_frame = ttk.LabelFrame(results_equipment_frame, text="Equipment List", style='Card.TLabelframe')
-        equipment_frame.grid(row=0, column=1, sticky=(tk.W, tk.E, tk.N, tk.S), padx=5)
-        equipment_frame.columnconfigure(0, weight=1)
-        equipment_frame.rowconfigure(0, weight=1)
+        equipment_frame = ttk.LabelFrame(results_equipment_frame, text="Equipment List")
+        equipment_frame.pack(side=tk.RIGHT, expand=True, fill=tk.BOTH, padx=(5, 0))
 
-        self.equipment_tree = ttk.Treeview(equipment_frame, columns=("Name", "Amount", "Cost per Unit", "Sell Price", "Profit"), show="headings", style='Treeview', height=10)
+        self.equipment_tree = ttk.Treeview(equipment_frame, columns=("Name", "Amount", "Cost per Unit", "Sell Price", "Profit"), show="headings")
         self.equipment_tree.heading("Name", text="Name")
         self.equipment_tree.heading("Amount", text="Amount")
         self.equipment_tree.heading("Cost per Unit", text="Cost per Unit")
         self.equipment_tree.heading("Sell Price", text="Sell Price")
         self.equipment_tree.heading("Profit", text="Profit")
         self.equipment_tree.column("Name", width=150)
-        self.equipment_tree.column("Amount", width=50)
-        self.equipment_tree.column("Cost per Unit", width=80)
-        self.equipment_tree.column("Sell Price", width=80)
-        self.equipment_tree.column("Profit", width=80)
-        self.equipment_tree.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S), padx=(1, 0), pady=(1, 1))
+        self.equipment_tree.column("Amount", width=60, anchor=tk.CENTER)
+        self.equipment_tree.column("Cost per Unit", width=100, anchor=tk.E)
+        self.equipment_tree.column("Sell Price", width=100, anchor=tk.E)
+        self.equipment_tree.column("Profit", width=100, anchor=tk.E)
+        self.equipment_tree.pack(side=tk.LEFT, expand=True, fill=tk.BOTH)
 
-        equipment_scrollbar = ttk.Scrollbar(equipment_frame, orient="vertical", command=self.equipment_tree.yview, style="Custom.Vertical.TScrollbar")
-        equipment_scrollbar.grid(row=0, column=1, sticky=(tk.N, tk.S), pady=(1, 1))
+        equipment_scrollbar = ttk.Scrollbar(equipment_frame, orient="vertical", command=self.equipment_tree.yview)
+        equipment_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         self.equipment_tree.configure(yscrollcommand=equipment_scrollbar.set)
 
-        # Ingredients and Intermediate Items frame
-        ingredients_intermediate_frame = ttk.Frame(main_frame, style='TFrame')
-        ingredients_intermediate_frame.grid(row=2, column=0, sticky=(tk.W, tk.E, tk.N, tk.S), pady=(5, 0))
-        ingredients_intermediate_frame.columnconfigure(0, weight=1)
-        ingredients_intermediate_frame.columnconfigure(1, weight=1)
-        ingredients_intermediate_frame.rowconfigure(0, weight=1)
+         # Ingredients and Intermediate Items frame
+        ingredients_intermediate_frame = ttk.Frame(self.main_frame)
+        ingredients_intermediate_frame.pack(expand=True, fill=tk.BOTH, padx=10, pady=5)
+        ingredients_intermediate_frame.columnconfigure(0, weight=6)  # 60% for ingredients
+        ingredients_intermediate_frame.columnconfigure(1, weight=4)  # 40% for intermediate
+        ingredients_intermediate_frame.rowconfigure(0, weight=1)  # Allow vertical expansion
 
-        # Intermediate items frame
-        intermediate_frame = ttk.LabelFrame(ingredients_intermediate_frame, text="Intermediate Items", style='Card.TLabelframe')
-        intermediate_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S), padx=(0, 5))
-        intermediate_frame.columnconfigure(0, weight=1)
-        intermediate_frame.rowconfigure(0, weight=1)
-
-        self.intermediate_tree = ttk.Treeview(intermediate_frame, columns=("Name", "Amount", "Cost", "Level"), show="headings", style='Treeview', height=10)
-        self.intermediate_tree.heading("Name", text="Name")
-        self.intermediate_tree.heading("Amount", text="Amount")
-        self.intermediate_tree.heading("Cost", text="Cost")
-        self.intermediate_tree.heading("Level", text="Level")
-        self.intermediate_tree.column("Name", width=150)
-        self.intermediate_tree.column("Amount", width=50)
-        self.intermediate_tree.column("Cost", width=80)
-        self.intermediate_tree.column("Level", width=50)
-        self.intermediate_tree.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S), padx=(1, 0), pady=(1, 1))
-
-        intermediate_scrollbar = ttk.Scrollbar(intermediate_frame, orient="vertical", command=self.intermediate_tree.yview, style="Custom.Vertical.TScrollbar")
-        intermediate_scrollbar.grid(row=0, column=1, sticky=(tk.N, tk.S), pady=(1, 1))
-        self.intermediate_tree.configure(yscrollcommand=intermediate_scrollbar.set)
 
         # Ingredients list frame
-        ingredients_frame = ttk.LabelFrame(ingredients_intermediate_frame, text="Ingredients List", style='Card.TLabelframe')
-        ingredients_frame.grid(row=0, column=1, sticky=(tk.W, tk.E, tk.N, tk.S), padx=(5, 0))
-        ingredients_frame.columnconfigure(0, weight=1)
+        ingredients_frame = ttk.LabelFrame(ingredients_intermediate_frame, text="Ingredients List")
+        ingredients_frame.grid(row=0, column=0, sticky="nsew", padx=(0, 5))
         ingredients_frame.rowconfigure(0, weight=1)
+        ingredients_frame.columnconfigure(0, weight=1)
 
-        self.ingredients_tree = ttk.Treeview(ingredients_frame, columns=("Name", "Amount", "Cost", "Type"), show="headings", style='Treeview', height=12)
+        self.ingredients_tree = ttk.Treeview(ingredients_frame, columns=("Name", "Amount", "Cost", "Type"), show="headings")
         self.ingredients_tree.heading("Name", text="Name")
         self.ingredients_tree.heading("Amount", text="Amount")
         self.ingredients_tree.heading("Cost", text="Cost")
         self.ingredients_tree.heading("Type", text="Type")
         self.ingredients_tree.column("Name", width=150)
-        self.ingredients_tree.column("Amount", width=50)
-        self.ingredients_tree.column("Cost", width=80)
+        self.ingredients_tree.column("Amount", width=60, anchor=tk.CENTER)
+        self.ingredients_tree.column("Cost", width=80, anchor=tk.E)
         self.ingredients_tree.column("Type", width=100)
-        self.ingredients_tree.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S), padx=(1, 0), pady=(1, 1))
+        self.ingredients_tree.grid(row=0, column=0, sticky="nsew")
 
-        ingredients_scrollbar = ttk.Scrollbar(ingredients_frame, orient="vertical", command=self.ingredients_tree.yview, style="Custom.Vertical.TScrollbar")
-        ingredients_scrollbar.grid(row=0, column=1, sticky=(tk.N, tk.S), pady=(1, 1))
+        ingredients_scrollbar = ttk.Scrollbar(ingredients_frame, orient="vertical", command=self.ingredients_tree.yview)
+        ingredients_scrollbar.grid(row=0, column=1, sticky="ns")
         self.ingredients_tree.configure(yscrollcommand=ingredients_scrollbar.set)
 
-        # Define tags for color coding
-        self.equipment_tree.tag_configure('profit', background='#2E4A1F')  # Darker green
-        self.equipment_tree.tag_configure('loss', background='#4A1F1F')  # Darker red
+        # Intermediate items frame
+        intermediate_frame = ttk.LabelFrame(ingredients_intermediate_frame, text="Intermediate Items")
+        intermediate_frame.grid(row=0, column=1, sticky="nsew", padx=(5, 0))
+        intermediate_frame.rowconfigure(0, weight=1)
+        intermediate_frame.columnconfigure(0, weight=1)
+
+        self.intermediate_tree = ttk.Treeview(intermediate_frame, columns=("Name", "Amount", "Cost", "Level"), show="headings")
+        self.intermediate_tree.heading("Name", text="Name")
+        self.intermediate_tree.heading("Amount", text="Amount")
+        self.intermediate_tree.heading("Cost", text="Cost")
+        self.intermediate_tree.heading("Level", text="Level")
+        self.intermediate_tree.column("Name", width=120)
+        self.intermediate_tree.column("Amount", width=60, anchor=tk.CENTER)
+        self.intermediate_tree.column("Cost", width=60, anchor=tk.E)
+        self.intermediate_tree.column("Level", width=50, anchor=tk.CENTER)
+        self.intermediate_tree.grid(row=0, column=0, sticky="nsew")
+
+        intermediate_scrollbar = ttk.Scrollbar(intermediate_frame, orient="vertical", command=self.intermediate_tree.yview)
+        intermediate_scrollbar.grid(row=0, column=1, sticky="ns")
+        self.intermediate_tree.configure(yscrollcommand=intermediate_scrollbar.set)
 
         # Bind events
         self.equipment_tree.bind("<Double-1>", self.on_equipment_double_click)
@@ -202,13 +182,14 @@ class StyledDofusCraftimizerUI:
         self.equipment_tree.bind("<Delete>", self.controller.remove_selected_equipment)
 
         # Bind deselect_all_trees to main_frame
-        main_frame.bind("<Button-1>", self.deselect_all_trees)
+        self.main_frame.bind("<Button-1>", self.deselect_all_trees)
 
         # Update tree bindings to handle selections
         self.equipment_tree.bind("<Button-1>", lambda e: self.on_tree_click(e, self.equipment_tree))
         self.ingredients_tree.bind("<Button-1>", lambda e: self.on_tree_click(e, self.ingredients_tree))
         self.intermediate_tree.bind("<Button-1>", lambda e: self.on_tree_click(e, self.intermediate_tree))
         self.results_tree.bind("<Button-1>", lambda e: self.on_tree_click(e, self.results_tree))
+
 
     def deselect_all_trees(self, event=None):
         for tree in [self.results_tree, self.equipment_tree, self.ingredients_tree, self.intermediate_tree]:
