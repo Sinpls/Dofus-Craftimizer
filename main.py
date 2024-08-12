@@ -367,5 +367,6 @@ class DofusCraftimizer:
 
 if __name__ == "__main__":
     root = tk.Tk()
+    root.iconbitmap("Dofus.ico")
     app = DofusCraftimizer(root)
     root.mainloop()
