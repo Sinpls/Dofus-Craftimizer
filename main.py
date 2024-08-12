@@ -24,19 +24,11 @@ class DofusCraftimizer:
         self.user_set_costs: Dict[str, float] = {}
         self.original_intermediate_items: Dict[str, Dict[str, Any]] = {}
 
+        self.set_icon()
         self.ui = StyledDofusCraftimizerUI(master, self)
 
-    def get_clean_type(self, type_data: Any) -> str:
-        if isinstance(type_data, str):
-            return type_data
-        elif isinstance(type_data, dict):
-            return type_data.get('name', 'Unknown')
-        else:
-            try:
-                type_dict = json.loads(type_data.replace("'", '"'))
-                return type_dict.get('name', 'Unknown')
-            except json.JSONDecodeError:
-                return str(type_data)
+    def set_icon(self):
+        self.master.iconbitmap("Dofus.ico")
 
     def search_equipment(self, event=None):
         query = self.ui.get_search_query()
@@ -77,6 +69,57 @@ class DofusCraftimizer:
         
         self.update_single_item()
         self.update_ingredients_list()
+        self.ui.deselect_all_trees()  # Deselect all after adding
+
+    def remove_selected_equipment(self, event=None):
+        selected_items = self.ui.equipment_tree.selection()
+        for item in selected_items:
+            self.ui.equipment_tree.delete(item)
+            self.equipment_data.pop(item, None)
+        self.calculate()
+        self.update_ingredients_list()
+        self.update_intermediate_items_list()
+        self.ui.deselect_all_trees()  # Deselect all after removing
+
+    def update_item(self, tree, item, column, new_value):
+        tree_id = str(tree)
+        if tree_id == str(self.ui.equipment_tree):
+            if column == "#2":  # Amount
+                self.equipment_data[item] = self.equipment_data.get(item, {})
+                self.equipment_data[item]["amount"] = int(self.parse_number(new_value))
+            elif column == "#4":  # Sell Price
+                self.equipment_data[item] = self.equipment_data.get(item, {})
+                self.equipment_data[item]["sell_price"] = float(self.parse_number(new_value))
+            self.update_single_item()
+        elif tree_id == str(self.ui.ingredients_tree):
+            ingredient_name = self.ui.get_tree_item_values(tree, item)[0]
+            new_cost = float(self.parse_number(new_value))
+            self.user_set_costs[ingredient_name] = new_cost
+            if new_cost == 0 and ingredient_name in self.original_intermediate_items:
+                self.move_item_to_intermediate(ingredient_name)
+        elif tree_id == str(self.ui.intermediate_tree):
+            item_name = self.ui.get_tree_item_values(tree, item)[0]
+            new_cost = float(self.parse_number(new_value))
+            self.user_set_costs[item_name] = new_cost
+            if item_name in self.intermediate_items:
+                self.intermediate_items[item_name]['cost'] = new_cost
+            if new_cost > 0:
+                self.move_item_to_ingredients(item_name)
+
+        self.calculate()
+        self.ui.deselect_all_trees()  # Deselect all after updating
+
+    def get_clean_type(self, type_data: Any) -> str:
+        if isinstance(type_data, str):
+            return type_data
+        elif isinstance(type_data, dict):
+            return type_data.get('name', 'Unknown')
+        else:
+            try:
+                type_dict = json.loads(type_data.replace("'", '"'))
+                return type_dict.get('name', 'Unknown')
+            except json.JSONDecodeError:
+                return str(type_data)
 
     @lru_cache(maxsize=100)
     def get_item_details(self, name_or_id: str) -> Dict[str, Any]:
@@ -89,6 +132,28 @@ class DofusCraftimizer:
                 if item_details:
                     return item_details[0]
         return None
+
+    def move_item_to_ingredients(self, item_name):
+        if item_name in self.intermediate_items:
+            item_details = self.intermediate_items.pop(item_name)
+            self.ingredient_manager.add_or_update_ingredient(
+                item_name,
+                self.total_amounts.get(item_name, 0),
+                self.user_set_costs.get(item_name, item_details['cost']),
+                ingredient_type=item_details['type']
+            )
+            self.update_ingredients_list()
+            self.update_intermediate_items_list()
+
+    def move_item_to_intermediate(self, item_name):
+        if item_name in self.original_intermediate_items:
+            original_details = self.original_intermediate_items[item_name]
+            self.intermediate_items[item_name] = original_details.copy()
+            self.intermediate_items[item_name]['amount'] = self.total_amounts.get(item_name, 0)
+            self.ingredient_manager.remove_ingredient(item_name)
+            self.user_set_costs.pop(item_name, None)
+            self.update_ingredients_list()
+            self.update_intermediate_items_list()
 
     def calculate_item_cost(self, item_details: Dict[str, Any], amount: int, level: int, parent_item: str = None) -> float:
         total_cost = 0
@@ -131,55 +196,40 @@ class DofusCraftimizer:
                             self.resource_usage.setdefault(ingredient_name, set()).add(parent_item)
 
         return total_cost
-    
-    def update_item(self, tree, item, column, new_value):
-        tree_id = str(tree)
-        if tree_id == str(self.ui.equipment_tree):
-            if column == "#2":  # Amount
-                self.equipment_data[item] = self.equipment_data.get(item, {})
-                self.equipment_data[item]["amount"] = int(self.parse_number(new_value))
-            elif column == "#4":  # Sell Price
-                self.equipment_data[item] = self.equipment_data.get(item, {})
-                self.equipment_data[item]["sell_price"] = float(self.parse_number(new_value))
-            self.update_single_item()
-        elif tree_id == str(self.ui.ingredients_tree):
-            ingredient_name = self.ui.get_tree_item_values(tree, item)[0]
-            new_cost = float(self.parse_number(new_value))
-            self.user_set_costs[ingredient_name] = new_cost
-            if new_cost == 0 and ingredient_name in self.original_intermediate_items:
-                self.move_item_to_intermediate(ingredient_name)
-        elif tree_id == str(self.ui.intermediate_tree):
-            item_name = self.ui.get_tree_item_values(tree, item)[0]
-            new_cost = float(self.parse_number(new_value))
-            self.user_set_costs[item_name] = new_cost
-            if item_name in self.intermediate_items:
-                self.intermediate_items[item_name]['cost'] = new_cost
-            if new_cost > 0:
-                self.move_item_to_ingredients(item_name)
 
-        self.calculate()
+    def calculate(self):
+        self.resource_usage.clear()
+        self.total_amounts.clear()
+        temp_intermediate_items = self.intermediate_items.copy()
+        self.intermediate_items.clear()
         
-    def move_item_to_ingredients(self, item_name):
-        if item_name in self.intermediate_items:
-            item_details = self.intermediate_items.pop(item_name)
-            self.ingredient_manager.add_or_update_ingredient(
-                item_name,
-                self.total_amounts.get(item_name, 0),
-                self.user_set_costs.get(item_name, item_details['cost']),
-                ingredient_type=item_details['type']
-            )
-            self.update_ingredients_list()
-            self.update_intermediate_items_list()
+        for ingredient in self.ingredient_manager.get_ingredients_list():
+            self.ingredient_manager.update_ingredient_amount(ingredient.name, 0)
 
-    def move_item_to_intermediate(self, item_name):
-        if item_name in self.original_intermediate_items:
-            original_details = self.original_intermediate_items[item_name]
-            self.intermediate_items[item_name] = original_details.copy()
-            self.intermediate_items[item_name]['amount'] = self.total_amounts.get(item_name, 0)
-            self.ingredient_manager.remove_ingredient(item_name)
-            self.user_set_costs.pop(item_name, None)
-            self.update_ingredients_list()
-            self.update_intermediate_items_list()
+        for item in self.ui.get_equipment_children():
+            name = self.ui.get_equipment_value(item, "Name")
+            amount = int(self.ui.get_equipment_value(item, "Amount"))
+            sell_price = float(self.equipment_data[item]["sell_price"])
+
+            item_details = self.get_item_details(name)
+            if item_details and item_details.get('recipe'):
+                cost_per_unit = self.calculate_item_cost(item_details, amount, 1, name) / amount
+                
+                profit_per_unit = sell_price - cost_per_unit
+                self.ui.set_equipment_value(item, "Cost per Unit", self.format_number(int(cost_per_unit)))
+                self.ui.set_equipment_value(item, "Profit", self.format_number(int(profit_per_unit * amount)))
+
+        for name, details in temp_intermediate_items.items():
+            if name in self.intermediate_items:
+                self.intermediate_items[name]['level'] = details['level']
+                if name in self.user_set_costs:
+                    self.intermediate_items[name]['cost'] = self.user_set_costs[name]
+                else:
+                    self.intermediate_items[name]['cost'] = details['cost']
+        
+        self.update_ingredients_list()
+        self.update_intermediate_items_list()
+    
     def update_single_item(self):
         for item in self.ui.get_equipment_children():
             name = self.ui.get_equipment_value(item, "Name")
@@ -219,48 +269,6 @@ class DofusCraftimizer:
             if name not in self.user_set_costs:
                 total_amount = self.total_amounts.get(name, 0)
                 self.ui.insert_intermediate_item((name, self.format_number(total_amount), self.format_number(int(details['cost'])), details['level']))
-
-    def calculate(self):
-        self.resource_usage.clear()
-        self.total_amounts.clear()
-        temp_intermediate_items = self.intermediate_items.copy()
-        self.intermediate_items.clear()
-        
-        for ingredient in self.ingredient_manager.get_ingredients_list():
-            self.ingredient_manager.update_ingredient_amount(ingredient.name, 0)
-
-        for item in self.ui.get_equipment_children():
-            name = self.ui.get_equipment_value(item, "Name")
-            amount = int(self.ui.get_equipment_value(item, "Amount"))
-            sell_price = float(self.equipment_data[item]["sell_price"])
-
-            item_details = self.get_item_details(name)
-            if item_details and item_details.get('recipe'):
-                cost_per_unit = self.calculate_item_cost(item_details, amount, 1, name) / amount
-                
-                profit_per_unit = sell_price - cost_per_unit
-                self.ui.set_equipment_value(item, "Cost per Unit", self.format_number(int(cost_per_unit)))
-                self.ui.set_equipment_value(item, "Profit", self.format_number(int(profit_per_unit * amount)))
-
-        for name, details in temp_intermediate_items.items():
-            if name in self.intermediate_items:
-                self.intermediate_items[name]['level'] = details['level']
-                if name in self.user_set_costs:
-                    self.intermediate_items[name]['cost'] = self.user_set_costs[name]
-                else:
-                    self.intermediate_items[name]['cost'] = details['cost']
-        
-        self.update_ingredients_list()
-        self.update_intermediate_items_list()
-
-    def remove_selected_equipment(self, event=None):
-        selected_items = self.ui.equipment_tree.selection()
-        for item in selected_items:
-            self.ui.equipment_tree.delete(item)
-            self.equipment_data.pop(item, None)
-        self.calculate()
-        self.update_ingredients_list()
-        self.update_intermediate_items_list()
 
     def format_number(self, number):
         return f"{number:,}"

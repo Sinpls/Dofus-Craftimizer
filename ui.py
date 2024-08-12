@@ -13,6 +13,7 @@ class StyledDofusCraftimizerUI:
         self.master.update()
         self.master.geometry('')  # This resets the window size to fit its contents
         self.master.minsize(self.master.winfo_width(), self.master.winfo_height())
+        self.last_clicked_tree = None
 
     def create_styles(self):
         self.style = ttk.Style()
@@ -193,12 +194,25 @@ class StyledDofusCraftimizerUI:
         self.equipment_tree.tag_configure('profit', background='#2E4A1F')  # Darker green
         self.equipment_tree.tag_configure('loss', background='#4A1F1F')  # Darker red
 
+        # Bind events
         self.equipment_tree.bind("<Double-1>", self.on_equipment_double_click)
         self.ingredients_tree.bind("<Double-1>", self.on_ingredient_double_click)
         self.intermediate_tree.bind("<Double-1>", self.on_intermediate_double_click)
         self.results_tree.bind("<Double-1>", self.controller.add_to_equipment_list)
-
         self.equipment_tree.bind("<Delete>", self.controller.remove_selected_equipment)
+
+        # Bind deselect_all_trees to main_frame
+        main_frame.bind("<Button-1>", self.deselect_all_trees)
+
+        # Update tree bindings to handle selections
+        self.equipment_tree.bind("<Button-1>", lambda e: self.on_tree_click(e, self.equipment_tree))
+        self.ingredients_tree.bind("<Button-1>", lambda e: self.on_tree_click(e, self.ingredients_tree))
+        self.intermediate_tree.bind("<Button-1>", lambda e: self.on_tree_click(e, self.intermediate_tree))
+        self.results_tree.bind("<Button-1>", lambda e: self.on_tree_click(e, self.results_tree))
+
+    def deselect_all_trees(self, event=None):
+        for tree in [self.results_tree, self.equipment_tree, self.ingredients_tree, self.intermediate_tree]:
+            tree.selection_remove(tree.selection())
 
     def get_search_query(self):
         return self.search_var.get()
@@ -274,6 +288,7 @@ class StyledDofusCraftimizerUI:
         
         if column in ("#2", "#4"):  # Amount or Sell Price column
             self.edit_tree_item(self.equipment_tree, item, column)
+        self.last_clicked_tree = self.equipment_tree
 
     def on_ingredient_double_click(self, event):
         item = self.ingredients_tree.identify('item', event.x, event.y)
@@ -281,6 +296,7 @@ class StyledDofusCraftimizerUI:
         
         if column == "#3":  # Cost column
             self.edit_tree_item(self.ingredients_tree, item, column)
+        self.last_clicked_tree = self.ingredients_tree
 
     def on_intermediate_double_click(self, event):
         item = self.intermediate_tree.identify('item', event.x, event.y)
@@ -288,6 +304,7 @@ class StyledDofusCraftimizerUI:
         
         if column == "#3":  # Cost column
             self.edit_tree_item(self.intermediate_tree, item, column)
+        self.last_clicked_tree = self.intermediate_tree
 
     def edit_tree_item(self, tree, item, column):
         x, y, width, height = tree.bbox(item, column)
@@ -313,3 +330,14 @@ class StyledDofusCraftimizerUI:
 
     def get_tree_children(self, tree):
         return tree.get_children()
+    
+    def on_tree_click(self, event, tree):
+        if self.last_clicked_tree and self.last_clicked_tree != tree:
+            self.last_clicked_tree.selection_remove(self.last_clicked_tree.selection())
+        self.last_clicked_tree = tree
+        tree.focus_set()
+
+    def deselect_all_trees(self, event=None):
+        for tree in [self.results_tree, self.equipment_tree, self.ingredients_tree, self.intermediate_tree]:
+            tree.selection_remove(tree.selection())
+        self.last_clicked_tree = None
