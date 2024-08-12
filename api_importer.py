@@ -3,6 +3,14 @@ import json
 import os
 import time
 
+def check_files_exist():
+    data_files = [
+        'dofus_resources.json',
+        'dofus_consumables.json',
+        'dofus_equipment.json'
+    ]
+    return all(os.path.exists(filename) for filename in data_files)
+
 def check_file_age(filename):
     if not os.path.exists(filename):
         return True
@@ -21,7 +29,7 @@ def update_json_file(url, filename):
     else:
         print(f"{filename} is up to date")
 
-def update_dofus_data():
+def update_dofus_data(status_callback=None):
     data_files = {
         'dofus_resources.json': 'https://api.dofusdu.de/dofus2/en/items/resources/all?sort%5Blevel%5D=desc',
         'dofus_consumables.json': 'https://api.dofusdu.de/dofus2/en/items/consumables/all?sort%5Blevel%5D=desc',
@@ -29,7 +37,9 @@ def update_dofus_data():
     }
 
     for filename, url in data_files.items():
+        if status_callback:
+            status_callback(f"Updating {filename}...")
         update_json_file(url, filename)
 
-if __name__ == "__main__":
-    update_dofus_data()
+    if status_callback:
+        status_callback("Data update complete")

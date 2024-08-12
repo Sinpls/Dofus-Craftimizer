@@ -1,21 +1,64 @@
+from contextlib import contextmanager
 import logging
 import json
 from functools import lru_cache
 import tkinter as tk
+from tkinter import ttk
 from typing import Dict, Any
+import threading
 
 from models import IngredientManager, Ingredient
 from utils import process_recipe
 from data_access import data_access
 from ui import StyledDofusCraftimizerUI
-from api_importer import update_dofus_data
+from api_importer import update_dofus_data, check_files_exist
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
+@contextmanager
+def loading_screen(master):
+    screen = LoadingScreen(master)
+    screen.start()
+    try:
+        yield screen
+    finally:
+        screen.stop()
+        screen.destroy()
+
+class LoadingScreen:
+    def __init__(self, master):
+        self.master = master
+        self.frame = ttk.Frame(self.master)
+        self.frame.pack(expand=True, fill=tk.BOTH)
+
+        self.progress = ttk.Progressbar(self.frame, length=300, mode='indeterminate')
+        self.progress.pack(pady=20)
+
+        self.status_label = ttk.Label(self.frame, text="Loading...")
+        self.status_label.pack()
+
+    def start(self):
+        self.progress.start()
+
+    def stop(self):
+        self.progress.stop()
+
+    def update_status(self, message):
+        self.status_label.config(text=message)
+
+    def destroy(self):
+        self.frame.destroy()
+
 class DofusCraftimizer:
     def __init__(self, master: tk.Tk):
+        logger.info("Initializing DofusCraftimizer")
         self.master = master
+        self.master.title("Dofus Craftimizer")
+        
+        # Remove the fixed geometry
+        # self.master.geometry("800x600")
+
         self.ingredient_manager = IngredientManager()
         self.equipment_data: Dict[str, Dict[str, float]] = {}
         self.intermediate_items: Dict[str, Dict[str, Any]] = {}
@@ -24,8 +67,58 @@ class DofusCraftimizer:
         self.user_set_costs: Dict[str, float] = {}
         self.original_intermediate_items: Dict[str, Dict[str, Any]] = {}
 
-        self.ui = StyledDofusCraftimizerUI(master, self)
+        with loading_screen(self.master) as self.loading_screen:
+            self.initialize_app()
 
+        # After initializing the app and creating the UI
+        self.master.update_idletasks()
+        width = self.master.winfo_reqwidth()
+        height = self.master.winfo_reqheight()
+        self.master.geometry(f"{width}x{height}")
+
+        # Allow the window to be resized
+        self.master.resizable(True, True)
+        
+    def initialize_app(self):
+        logger.info("Starting initialization process")
+        if not check_files_exist():
+            logger.info("JSON files not found, starting download")
+            self.loading_screen.update_status("Downloading data files...")
+            self.start_update()
+        else:
+            logger.info("JSON files found, loading main UI")
+            self.load_main_ui()
+
+    def start_update(self):
+        self.update_thread = threading.Thread(target=self.update_data)
+        self.update_thread.start()
+        self.master.after(100, self.check_update_complete)
+
+    def update_data(self):
+        logger.info("Updating Dofus data (calling api_importer)")
+        try:
+            update_dofus_data(self.loading_screen.update_status)
+        except Exception as e:
+            logger.error(f"Error updating Dofus data: {e}")
+            self.loading_screen.update_status(f"Error: {e}")
+        else:
+            logger.info("Data update complete")
+
+    def check_update_complete(self):
+        if self.update_thread.is_alive():
+            self.master.after(100, self.check_update_complete)
+        else:
+            logger.info("Update complete, loading main UI")
+            self.load_main_ui()
+
+    def load_main_ui(self):
+        try:
+            self.ui = StyledDofusCraftimizerUI(self.master, self)
+            logger.info("Main UI created and displayed")
+        except Exception as e:
+            logger.error(f"Error loading main UI: {e}")
+            self.loading_screen.update_status(f"Error: {e}")
+    
     def search_equipment(self, event=None):
         query = self.ui.get_search_query()
         results = data_access.search_items('dofus_equipment.json', query)
@@ -272,7 +365,6 @@ class DofusCraftimizer:
     def parse_number(self, string):
         return int(string.replace(',', ''))
 
-update_dofus_data()
 if __name__ == "__main__":
     root = tk.Tk()
     app = DofusCraftimizer(root)
