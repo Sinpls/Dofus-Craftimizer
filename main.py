@@ -38,26 +38,36 @@ class LoadingScreen:
         self.status_label = ttk.Label(self.frame, text="Loading...")
         self.status_label.pack()
 
+        self.is_destroyed = False
+
     def start(self):
-        self.progress.start()
+        if not self.is_destroyed:
+            self.progress.start()
 
     def stop(self):
-        self.progress.stop()
+        if not self.is_destroyed:
+            self.progress.stop()
 
     def update_status(self, message):
-        self.status_label.config(text=message)
+        if not self.is_destroyed:
+            self.status_label.config(text=message)
 
     def destroy(self):
-        self.frame.destroy()
-
+        if not self.is_destroyed:
+            self.is_destroyed = True
+            self.frame.destroy()
+    
 class DofusCraftimizer:
     def __init__(self, master: tk.Tk):
         logger.info("Initializing DofusCraftimizer")
         self.master = master
         self.master.title("Dofus Craftimizer")
         
-        # Remove the fixed geometry
-        # self.master.geometry("800x600")
+        # Set an initial size
+        self.master.geometry("800x600")
+
+        # Allow the window to be resized
+        self.master.resizable(True, True)
 
         self.ingredient_manager = IngredientManager()
         self.equipment_data: Dict[str, Dict[str, float]] = {}
@@ -70,14 +80,11 @@ class DofusCraftimizer:
         with loading_screen(self.master) as self.loading_screen:
             self.initialize_app()
 
-        # After initializing the app and creating the UI
+        # Adjust window size after main UI is loaded
         self.master.update_idletasks()
-        width = self.master.winfo_reqwidth()
-        height = self.master.winfo_reqheight()
+        width = max(800, self.master.winfo_reqwidth())
+        height = max(600, self.master.winfo_reqheight())
         self.master.geometry(f"{width}x{height}")
-
-        # Allow the window to be resized
-        self.master.resizable(True, True)
         
     def initialize_app(self):
         logger.info("Starting initialization process")
@@ -88,6 +95,7 @@ class DofusCraftimizer:
         else:
             logger.info("JSON files found, loading main UI")
             self.load_main_ui()
+            self.loading_screen.destroy()
 
     def start_update(self):
         self.update_thread = threading.Thread(target=self.update_data)
@@ -100,7 +108,8 @@ class DofusCraftimizer:
             update_dofus_data(self.loading_screen.update_status)
         except Exception as e:
             logger.error(f"Error updating Dofus data: {e}")
-            self.loading_screen.update_status(f"Error: {e}")
+            if not self.loading_screen.is_destroyed:
+                self.loading_screen.update_status(f"Error: {e}")
         else:
             logger.info("Data update complete")
 
@@ -115,9 +124,16 @@ class DofusCraftimizer:
         try:
             self.ui = StyledDofusCraftimizerUI(self.master, self)
             logger.info("Main UI created and displayed")
+            
+            # Adjust window size after main UI is loaded
+            self.master.update_idletasks()
+            width = max(800, self.master.winfo_reqwidth())
+            height = max(600, self.master.winfo_reqheight())
+            self.master.geometry(f"{width}x{height}")
         except Exception as e:
             logger.error(f"Error loading main UI: {e}")
-            self.loading_screen.update_status(f"Error: {e}")
+            if not self.loading_screen.is_destroyed:
+                self.loading_screen.update_status(f"Error: {e}")
     
     def search_equipment(self, event=None):
         query = self.ui.get_search_query()
@@ -175,7 +191,7 @@ class DofusCraftimizer:
         if tree_id == str(self.ui.equipment_tree):
             if column == "#2":  # Amount
                 self.equipment_data[item] = self.equipment_data.get(item, {})
-                self.equipment_data[item]["amount"] = int(self.parse_number(new_value))
+                self.equipment_data[item]["amount"] = self.parse_number(new_value)
             elif column == "#4":  # Sell Price
                 self.equipment_data[item] = self.equipment_data.get(item, {})
                 self.equipment_data[item]["sell_price"] = float(self.parse_number(new_value))
@@ -349,8 +365,13 @@ class DofusCraftimizer:
                 ingredient = self.ingredient_manager.get_ingredient(ingredient_name)
                 cost = self.user_set_costs.get(ingredient_name, ingredient.cost if ingredient else 0)
                 ingredient_type = ingredient.type if ingredient else self.intermediate_items.get(ingredient_name, {}).get('type', 'Intermediate')
+                
+                # Check if it's an intermediate item
+                if ingredient_name in self.original_intermediate_items:
+                    ingredient_type = 'Intermediate'
+                
                 self.ui.insert_ingredient((ingredient_name, self.format_number(total_amount), self.format_number(int(cost)), ingredient_type))
-
+                
     def update_intermediate_items_list(self):
         self.ui.clear_intermediate_items()
         sorted_items = sorted(self.intermediate_items.items(), key=lambda x: x[1]['level'])
@@ -363,7 +384,10 @@ class DofusCraftimizer:
         return f"{number:,}"
 
     def parse_number(self, string):
-        return int(string.replace(',', ''))
+        try:
+            return int(string.replace(',', ''))
+        except ValueError:
+            return 0
 
 if __name__ == "__main__":
     root = tk.Tk()
