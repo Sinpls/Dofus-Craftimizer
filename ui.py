@@ -48,7 +48,7 @@ class StyledDofusCraftimizerUI:
         self.style.configure("Custom.Vertical.TScrollbar", background=scrollbar_bg, troughcolor=bg_dark, 
                             bordercolor=border_color, arrowcolor=light_grey, relief='flat')
         self.style.map("Custom.Vertical.TScrollbar", background=[('active', scrollbar_fg)])
-        
+
         # Configure horizontal scrollbar if needed
         self.style.configure("Custom.Horizontal.TScrollbar", background=scrollbar_bg, troughcolor=bg_dark, 
                             bordercolor=border_color, arrowcolor=light_grey, relief='flat')
@@ -69,7 +69,15 @@ class StyledDofusCraftimizerUI:
                         'Entry.textarea', {'sticky': 'nswe'})],
                     'sticky': 'nswe'})], 'sticky': 'nswe'})],
                 'border': '1', 'sticky': 'nswe'})])
-        
+
+        # Configure profit/loss tags
+        self.style.configure('profit.Treeview', background='#1e3f20')  # Dark green
+        self.style.configure('loss.Treeview', background='#3f1e1e')  # Dark red
+
+        # Configure tag-specific styles
+        self.style.map('Treeview', background=[('selected', accent_color)])
+        self.style.map('profit.Treeview', background=[('selected', '#2e5f30')])  # Lighter green when selected
+        self.style.map('loss.Treeview', background=[('selected', '#5f2e2e')])  # Lighter red when selected
     def create_widgets(self):
         # Main frame
         self.main_frame = ttk.Frame(self.master, padding="10 10 10 10", style='TFrame')
@@ -224,8 +232,28 @@ class StyledDofusCraftimizerUI:
         return self.results_tree.item(item)['tags'][0]
 
     def insert_equipment(self, item_name, values):
-        return self.equipment_tree.insert("", "end", values=values, tags=(item_name,))
-
+        item = self.equipment_tree.insert("", "end", values=values, tags=(item_name,))
+        self.update_equipment_row_color(item)
+        return item
+    
+    def update_equipment_row_color(self, item):
+        profit = self.equipment_tree.set(item, "Profit")
+        
+        try:
+            profit_value = int(profit.replace(',', ''))
+            
+            if profit_value > 0:
+                self.equipment_tree.tag_configure('profit', background='#1e3f20')
+                self.equipment_tree.item(item, tags=('profit',))
+            elif profit_value < 0:
+                self.equipment_tree.tag_configure('loss', background='#3f1e1e')
+                self.equipment_tree.item(item, tags=('loss',))
+            else:
+                self.equipment_tree.item(item, tags=())
+        except ValueError:
+            # If profit is not a valid number, don't apply any color
+            self.equipment_tree.item(item, tags=())
+        
     def get_equipment_children(self):
         return self.equipment_tree.get_children()
 
@@ -257,6 +285,7 @@ class StyledDofusCraftimizerUI:
 
     def set_equipment_tags(self, item, tags):
         self.equipment_tree.item(item, tags=tags)
+        self.update_equipment_row_color(item)
 
     def create_edit_entry(self, parent, item, column):
         x, y, width, height = parent.bbox(item, column)
@@ -272,7 +301,7 @@ class StyledDofusCraftimizerUI:
         item = self.equipment_tree.identify('item', event.x, event.y)
         column = self.equipment_tree.identify_column(event.x)
         
-        if column in ("#2", "#4"):  # Amount or Sell Price column
+        if column in ("#2", "#3", "#4"):  # Amount, Cost per Unit, or Sell Price column
             self.edit_tree_item(self.equipment_tree, item, column)
         self.last_clicked_tree = self.equipment_tree
 

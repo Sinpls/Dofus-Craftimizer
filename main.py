@@ -1,17 +1,19 @@
+import os
+import sys
 from contextlib import contextmanager
 import logging
 import json
 from functools import lru_cache
 import tkinter as tk
-from tkinter import ttk
+from tkinter import ttk, messagebox
 from typing import Dict, Any
 import threading
 
-from models import IngredientManager, Ingredient
+from models import IngredientManager
 from utils import process_recipe
 from data_access import data_access
 from ui import StyledDofusCraftimizerUI
-from api_importer import update_dofus_data, check_files_exist
+from api_importer import update_dofus_data, check_files_exist, get_data_dir
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -77,25 +79,38 @@ class DofusCraftimizer:
         self.user_set_costs: Dict[str, float] = {}
         self.original_intermediate_items: Dict[str, Dict[str, Any]] = {}
 
-        with loading_screen(self.master) as self.loading_screen:
-            self.initialize_app()
+        self.loading_screen = None
+        self.center_window(self.master)
+        self.initialize_app()
 
-        # Adjust window size after main UI is loaded
-        self.master.update_idletasks()
-        width = max(800, self.master.winfo_reqwidth())
-        height = max(600, self.master.winfo_reqheight())
-        self.master.geometry(f"{width}x{height}")
-        
     def initialize_app(self):
         logger.info("Starting initialization process")
         if not check_files_exist():
             logger.info("JSON files not found, starting download")
-            self.loading_screen.update_status("Downloading data files...")
+            self.show_loading_screen("Downloading data files...")
             self.start_update()
         else:
             logger.info("JSON files found, loading main UI")
             self.load_main_ui()
+
+    def center_window(self, window):
+        window.update_idletasks()
+        width = window.winfo_width()
+        height = window.winfo_height()
+        x = (window.winfo_screenwidth() // 2) - (width // 2)
+        y = (window.winfo_screenheight() // 2) - (height // 2)
+        window.geometry('{}x{}+{}+{}'.format(width, height, x, y))
+
+    def show_loading_screen(self, message):
+        if self.loading_screen is None:
+            self.loading_screen = LoadingScreen(self.master)
+        self.loading_screen.update_status(message)
+
+    def hide_loading_screen(self):
+        if self.loading_screen:
+            self.loading_screen.stop()
             self.loading_screen.destroy()
+            self.loading_screen = None
 
     def start_update(self):
         self.update_thread = threading.Thread(target=self.update_data)
@@ -105,20 +120,29 @@ class DofusCraftimizer:
     def update_data(self):
         logger.info("Updating Dofus data (calling api_importer)")
         try:
-            update_dofus_data(self.loading_screen.update_status)
+            update_dofus_data(self.update_status)
         except Exception as e:
             logger.error(f"Error updating Dofus data: {e}")
-            if not self.loading_screen.is_destroyed:
-                self.loading_screen.update_status(f"Error: {e}")
+            self.master.after(0, self.show_error_message, f"Failed to update data: {e}\nThe application may not function correctly.")
         else:
             logger.info("Data update complete")
+
+    def update_status(self, message):
+        if self.loading_screen:
+            self.master.after(0, self.loading_screen.update_status, message)
 
     def check_update_complete(self):
         if self.update_thread.is_alive():
             self.master.after(100, self.check_update_complete)
         else:
             logger.info("Update complete, loading main UI")
+            self.hide_loading_screen()
             self.load_main_ui()
+
+    def show_error_message(self, message):
+        self.hide_loading_screen()
+        messagebox.showerror("Error", message)
+        self.master.quit()
 
     def load_main_ui(self):
         try:
@@ -130,10 +154,10 @@ class DofusCraftimizer:
             width = max(800, self.master.winfo_reqwidth())
             height = max(600, self.master.winfo_reqheight())
             self.master.geometry(f"{width}x{height}")
+            self.center_window(self.master)
         except Exception as e:
             logger.error(f"Error loading main UI: {e}")
-            if not self.loading_screen.is_destroyed:
-                self.loading_screen.update_status(f"Error: {e}")
+            self.show_error_message(f"Failed to load main UI: {e}")
     
     def search_equipment(self, event=None):
         query = self.ui.get_search_query()
@@ -261,6 +285,10 @@ class DofusCraftimizer:
             self.update_intermediate_items_list()
 
     def calculate_item_cost(self, item_details: Dict[str, Any], amount: int, level: int, parent_item: str = None) -> float:
+        item_name = item_details['name']
+        if item_name in self.user_set_costs:
+            return self.user_set_costs[item_name] * amount
+
         total_cost = 0
         if 'recipe' in item_details and item_details['recipe']:
             ingredients = process_recipe(item_details['recipe'], amount)
@@ -323,6 +351,9 @@ class DofusCraftimizer:
                 profit_per_unit = sell_price - cost_per_unit
                 self.ui.set_equipment_value(item, "Cost per Unit", self.format_number(int(cost_per_unit)))
                 self.ui.set_equipment_value(item, "Profit", self.format_number(int(profit_per_unit * amount)))
+                
+                # Update row color
+                self.ui.update_equipment_row_color(item)
 
         for name, details in temp_intermediate_items.items():
             if name in self.intermediate_items:
@@ -334,7 +365,7 @@ class DofusCraftimizer:
         
         self.update_ingredients_list()
         self.update_intermediate_items_list()
-    
+        
     def update_single_item(self):
         for item in self.ui.get_equipment_children():
             name = self.ui.get_equipment_value(item, "Name")
@@ -352,8 +383,8 @@ class DofusCraftimizer:
                 self.ui.set_equipment_value(item, "Cost per Unit", self.format_number(int(cost_per_unit)))
                 self.ui.set_equipment_value(item, "Profit", self.format_number(int(profit)))
 
-                # Color coding
-                self.ui.set_equipment_tags(item, ('profit',) if profit > 0 else ('loss',) if profit < 0 else ())
+                # Update row color
+                self.ui.update_equipment_row_color(item)
 
         self.update_ingredients_list()
         self.update_intermediate_items_list()
@@ -391,6 +422,5 @@ class DofusCraftimizer:
 
 if __name__ == "__main__":
     root = tk.Tk()
-    root.iconbitmap("Dofus.ico")
     app = DofusCraftimizer(root)
     root.mainloop()
