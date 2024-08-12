@@ -24,11 +24,7 @@ class DofusCraftimizer:
         self.user_set_costs: Dict[str, float] = {}
         self.original_intermediate_items: Dict[str, Dict[str, Any]] = {}
 
-        self.set_icon()
         self.ui = StyledDofusCraftimizerUI(master, self)
-
-    def set_icon(self):
-        self.master.iconbitmap("Dofus.ico")
 
     def search_equipment(self, event=None):
         query = self.ui.get_search_query()

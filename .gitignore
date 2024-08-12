@@ -2,3 +2,6 @@
 dofus_consumables.json
 dofus_equipment.json
 dofus_resources.json
+/dist
+/build
+__pycache__/api_importer.cpython-39.pyc
